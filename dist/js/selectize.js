@@ -865,7 +865,9 @@
 					e.preventDefault();
 					return;
 				case KEY_RETURN:
-					if (self.isOpen && self.$activeOption) {
+					if (self.settings.blurOnEmptyReturn && $.trim(self.$control_input.val()).length) {
+						self.blur();
+					} else if (self.isOpen && self.$activeOption) {
 						self.onOptionSelect({currentTarget: self.$activeOption});
 					}
 					e.preventDefault();
@@ -2293,6 +2295,7 @@
 		diacritics: true,
 		create: false,
 		createOnBlur: false,
+		blurOnEmptyReturn: false,
 		highlight: true,
 		openOnFocus: true,
 		maxOptions: 1000,
@@ -2351,6 +2354,7 @@
 			*/
 		}
 	};
+	
 	
 	$.fn.selectize = function(settings_user) {
 		var defaults             = $.fn.selectize.defaults;
