@@ -1,5 +1,5 @@
 /**
- * selectize.js (v0.8.5)
+ * selectize.js (v0.9.0)
  * Copyright (c) 2013 Brian Reavis & contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
@@ -20,6 +20,8 @@
 (function(root, factory) {
 	if (typeof define === 'function' && define.amd) {
 		define(['jquery','sifter','microplugin'], factory);
+	} else if (typeof exports === 'object') {
+		module.exports = factory(require('jquery'), require('sifter'), require('microplugin'));
 	} else {
 		root.Selectize = factory(root.jQuery, root.Sifter, root.MicroPlugin);
 	}
@@ -105,8 +107,10 @@
 	var KEY_ESC       = 27;
 	var KEY_LEFT      = 37;
 	var KEY_UP        = 38;
+	var KEY_P         = 80;
 	var KEY_RIGHT     = 39;
 	var KEY_DOWN      = 40;
+	var KEY_N         = 78;
 	var KEY_BACKSPACE = 8;
 	var KEY_DELETE    = 46;
 	var KEY_SHIFT     = 16;
@@ -116,6 +120,7 @@
 	
 	var TAG_SELECT    = 1;
 	var TAG_INPUT     = 2;
+	
 	
 	var isset = function(object) {
 		return typeof object !== 'undefined';
@@ -363,6 +368,10 @@
 	 * @returns {int}
 	 */
 	var measureString = function(str, $parent) {
+		if (!str) {
+			return 0;
+		}
+		
 		var $test = $('<test>').css({
 			position: 'absolute',
 			top: -99999,
@@ -396,6 +405,8 @@
 	 * @param {object} $input
 	 */
 	var autoGrow = function($input) {
+		var currentWidth = null;
+		
 		var update = function(e) {
 			var value, keyCode, printable, placeholder, width;
 			var shift, character, selection;
@@ -438,7 +449,8 @@
 			}
 	
 			width = measureString(value, $input) + 4;
-			if (width !== $input.width()) {
+			if (width !== currentWidth) {
+				currentWidth = width;
 				$input.width(width);
 				$input.triggerHandler('resize');
 			}
@@ -560,7 +572,7 @@
 	
 			$wrapper          = $('<div>').addClass(settings.wrapperClass).addClass(classes).addClass(inputMode);
 			$control          = $('<div>').addClass(settings.inputClass).addClass('items').appendTo($wrapper);
-			$control_input    = $('<input type="text" autocomplete="off">').appendTo($control).attr('tabindex', tab_index);
+			$control_input    = $('<input type="text" autocomplete="off" />').appendTo($control).attr('tabindex', tab_index);
 			$dropdown_parent  = $(settings.dropdownParent || $wrapper);
 			$dropdown         = $('<div>').addClass(settings.dropdownClass).addClass(classes).addClass(inputMode).hide().appendTo($dropdown_parent);
 			$dropdown_content = $('<div>').addClass(settings.dropdownContentClass).appendTo($dropdown);
@@ -680,7 +692,7 @@
 			self.trigger('initialize');
 	
 			// preload options
-			if (settings.preload) {
+			if (settings.preload === true) {
 				self.onSearchChange('');
 			}
 		},
@@ -846,6 +858,8 @@
 				case KEY_ESC:
 					self.close();
 					return;
+				case KEY_N:
+					if (!e.ctrlKey) break;
 				case KEY_DOWN:
 					if (!self.isOpen && self.hasOptions) {
 						self.open();
@@ -856,6 +870,8 @@
 					}
 					e.preventDefault();
 					return;
+				case KEY_P:
+					if (!e.ctrlKey) break;
 				case KEY_UP:
 					if (self.$activeOption) {
 						self.ignoreHover = true;
@@ -879,6 +895,9 @@
 					self.advanceSelection(1, e);
 					return;
 				case KEY_TAB:
+					if (self.isOpen && self.$activeOption) {
+						self.onOptionSelect({currentTarget: self.$activeOption});
+					}
 					if (self.settings.create && self.createItem()) {
 						e.preventDefault();
 					}
@@ -972,7 +991,7 @@
 			if (self.ignoreFocus) return;
 	
 			if (self.settings.create && self.settings.createOnBlur) {
-				self.createItem();
+				self.createItem(false);
 			}
 	
 			self.close();
@@ -1102,10 +1121,7 @@
 		setValue: function(value) {
 			debounce_events(this, ['change'], function() {
 				this.clear();
-				var items = $.isArray(value) ? value : [value];
-				for (var i = 0, n = items.length; i < n; i++) {
-					this.addItem(items[i]);
-				}
+				this.addItems(value);
 			});
 		},
 	
@@ -1672,6 +1688,20 @@
 		},
 	
 		/**
+		 * "Selects" multiple items at once. Adds them to the list
+		 * at the current caret position.
+		 *
+		 * @param {string} value
+		 */
+		addItems: function(values) {
+			var items = $.isArray(values) ? values : [values];
+			for (var i = 0, n = items.length; i < n; i++) {
+				this.isPending = (i < n - 1);
+				this.addItem(items[i]);
+			}
+		},
+	
+		/**
 		 * "Selects" an item. Adds it to the list
 		 * at the current caret position.
 		 *
@@ -1679,10 +1709,10 @@
 		 */
 		addItem: function(value) {
 			debounce_events(this, ['change'], function() {
-				var $item, $option;
+				var $item, $option, $options;
 				var self = this;
 				var inputMode = self.settings.mode;
-				var i, active, options, value_next;
+				var i, active, value_next;
 				value = hash_key(value);
 	
 				if (self.items.indexOf(value) !== -1) {
@@ -1700,18 +1730,20 @@
 				self.refreshState();
 	
 				if (self.isSetup) {
-					options = self.$dropdown_content.find('[data-selectable]');
+					$options = self.$dropdown_content.find('[data-selectable]');
 	
-					// update menu / remove the option
-					$option = self.getOption(value);
-					value_next = self.getAdjacentOption($option, 1).attr('data-value');
-					self.refreshOptions(self.isFocused && inputMode !== 'single');
-					if (value_next) {
-						self.setActiveOption(self.getOption(value_next));
+					// update menu / remove the option (if this is not one item being added as part of series)
+					if (!this.isPending) {
+						$option = self.getOption(value);
+						value_next = self.getAdjacentOption($option, 1).attr('data-value');
+						self.refreshOptions(self.isFocused && inputMode !== 'single');
+						if (value_next) {
+							self.setActiveOption(self.getOption(value_next));
+						}
 					}
 	
 					// hide the menu if the maximum number of items have been selected or no options are left
-					if (!options.length || (self.settings.maxItems !== null && self.items.length >= self.settings.maxItems)) {
+					if (!$options.length || (self.settings.maxItems !== null && self.items.length >= self.settings.maxItems)) {
 						self.close();
 					} else {
 						self.positionDropdown();
@@ -1773,12 +1805,16 @@
 		 *
 		 * @return {boolean}
 		 */
-		createItem: function() {
+		createItem: function(triggerDropdown) {
 			var self  = this;
 			var input = $.trim(self.$control_input.val() || '');
 			var caret = self.caretPos;
 			if (!input.length) return false;
 			self.lock();
+	
+			if (typeof triggerDropdown === 'undefined') {
+				triggerDropdown = true;
+			}
 	
 			var setup = (typeof self.settings.create === 'function') ? this.settings.create : function(input) {
 				var data = {};
@@ -1798,7 +1834,7 @@
 				self.addOption(data);
 				self.setCaret(caret);
 				self.addItem(value);
-				self.refreshOptions(self.settings.mode !== 'single');
+				self.refreshOptions(triggerDropdown && self.settings.mode !== 'single');
 			});
 	
 			var output = setup.apply(this, [input, create]);
@@ -2708,7 +2744,7 @@
 					e.preventDefault();
 					if (self.isLocked) return;
 	
-					var $item = $(e.target).parent();
+					var $item = $(e.currentTarget).parent();
 					self.setActiveItem($item);
 					if (self.deleteSelection()) {
 						self.setCaret(self.items.length);
