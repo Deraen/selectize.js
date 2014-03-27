@@ -427,16 +427,14 @@
 	var DIACRITICS = {
 		'a': '[aÀÁÂÃÄÅàáâãäå]',
 		'c': '[cÇçćĆčČ]',
-		'd': '[dđĐďĎ]',
-		'e': '[eÈÉÊËèéêëěĚ]',
+		'd': '[dđĐ]',
+		'e': '[eÈÉÊËèéêë]',
 		'i': '[iÌÍÎÏìíîï]',
-		'n': '[nÑñňŇ]',
+		'n': '[nÑñ]',
 		'o': '[oÒÓÔÕÕÖØòóôõöø]',
-		'r': '[rřŘ]',
 		's': '[sŠš]',
-		't': '[tťŤ]',
-		'u': '[uÙÚÛÜùúûüůŮ]',
-		'y': '[yŸÿýÝ]',
+		'u': '[uÙÚÛÜùúûü]',
+		'y': '[yŸÿý]',
 		'z': '[zŽž]'
 	};
 
@@ -1467,7 +1465,7 @@
 					e.preventDefault();
 					return;
 				case KEY_RETURN:
-					if (self.settings.blurOnEmptyReturn && $.trim(self.$control_input.val()).length) {
+					if (self.settings.blurOnEmptyReturn && $.trim(self.$control_input.val() || '').length === 0) {
 						self.blur();
 					} else if (self.isOpen && self.$activeOption) {
 						self.onOptionSelect({currentTarget: self.$activeOption});
